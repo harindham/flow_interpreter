@@ -230,6 +230,24 @@ void exec_node(Node *node, int input_fd, int output_fd, int redirect_stderr) {
     }
 }
 
+void copy_fd(int input_fd, int output_fd) {
+    char buffer[4096];
+    ssize_t bytes_read;
+
+    while ((bytes_read = read(input_fd, buffer, sizeof(buffer))) > 0) {
+        ssize_t bytes_written = write(output_fd, buffer, bytes_read);
+        if (bytes_written != bytes_read) {
+            perror("write");
+            exit(1);
+        }
+    }
+
+    if (bytes_read < 0) {
+        perror("read");
+        exit(1);
+    }
+}
+
 void execute_component(Flow *flow, const char *name, int input_fd, int output_fd) {
     Node *node = find_node(flow, name);
     FileIO *file = find_file(flow, name);
@@ -243,13 +261,25 @@ void execute_component(Flow *flow, const char *name, int input_fd, int output_fd
     }
 
     if (file) {
-        int fd = open(file->filename, O_RDONLY);
-        if (fd < 0) { perror("open file"); exit(1); }
-        char buf[1024]; ssize_t r;
-        while ((r = read(fd, buf, sizeof(buf))) > 0)
-            write(output_fd, buf, r);
-        close(fd);
-        return;
+        if(input_fd==-1){
+            int fd = open(file->filename, O_RDONLY);
+            if (fd < 0) { perror("open file"); exit(1); }
+            char buf[1024]; ssize_t r;
+            while ((r = read(fd, buf, sizeof(buf))) > 0)
+                write(output_fd, buf, r);
+            close(fd);
+            return;
+        }
+        else{
+            int fd = open(file->filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (fd < 0) { perror("open"); exit(1); }
+
+            copy_fd(input_fd, fd);
+
+            close(input_fd);
+            close(fd);
+            return;
+        }
     }
 
     if (concat) {
@@ -300,7 +330,7 @@ void execute_component(Flow *flow, const char *name, int input_fd, int output_fd
     exit(1);
 }
 
-void execute_pipe(Flow *flow, const char *pipe_name) {
+void execute_main_pipe(Flow *flow, const char *pipe_name) {
     Pipe *pipe_obj = NULL;
     for (int i = 0; i < flow->pipe_count; i++)
         if (strncmp(flow->pipes[i].name, pipe_name, sizeof(flow->pipes[i].name)) == 0)
@@ -344,6 +374,6 @@ int main(int argc, char *argv[]) {
     parse_flow_file(argv[1], &flow);
 
     /* Execute the target pipe */
-    execute_pipe(&flow, argv[2]);
+    execute_main_pipe(&flow, argv[2]);
     return 0;
 }

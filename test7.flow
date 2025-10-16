@@ -12,5 +12,5 @@ from=a
 to=b
 
 pipe=pipe2
-from=b
+from=pipe1
 to=c

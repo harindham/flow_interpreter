@@ -12,5 +12,5 @@ from=inputfile
 to=catfile
 
 pipe=pipe2
-from=catfile
+from=pipe1
 to=outputfile
