@@ -1,0 +1,16 @@
+file=inputfile
+name=foo.txt
+
+node=catfile
+command=cat
+
+file=outputfile
+name=out.txt
+
+pipe=pipe1
+from=inputfile
+to=catfile
+
+pipe=pipe2
+from=catfile
+to=outputfile

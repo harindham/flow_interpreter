@@ -1,0 +1,17 @@
+node=foo
+command=echo foo
+
+node=bar
+command=echo bar
+
+concatenate=foo_and_bar
+parts=2
+part_0=foo
+part_1=bar
+
+node=wordcount
+command=wc
+
+pipe=conc_pipe
+from=foo_and_bar
+to=wordcount

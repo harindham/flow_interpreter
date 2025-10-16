@@ -1,0 +1,9 @@
+file=inputfile
+name=input.txt
+
+node=catfile
+command=cat
+
+pipe=pipe1
+from=inputfile
+to=catfile
