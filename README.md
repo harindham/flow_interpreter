@@ -8,5 +8,5 @@ gcc -Wall -Wextra -o flow flow.c
 
 ## Usage
 ```bash
-./flow [.flow file] [target pipe]
+./flow [.flow file] [target]
 ```

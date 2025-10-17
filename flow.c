@@ -370,10 +370,17 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
+    const char *filename = argv[1];
+    size_t len = strlen(filename);
+    if (len < 6 || strcmp(filename + len - 5, ".flow") != 0) {
+        fprintf(stderr, "Error: Input file must have a .flow extension\n");
+        fprintf(stderr, "Usage: %s <file.flow> <target>\n", argv[0]);
+        exit(1);
+    }
+
     Flow flow = {0};
     parse_flow_file(argv[1], &flow);
 
-    /* Execute the target pipe */
     execute_main_pipe(&flow, argv[2]);
     return 0;
 }

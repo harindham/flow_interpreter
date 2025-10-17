@@ -1,7 +1,9 @@
 node=listfiles
 command=ls
+
 node=wordcount
 command=wc
+
 pipe=doit
 from=listfiles
 to=wordcount
