@@ -1,1 +1,2 @@
 Content of foo will be transferred to out.
+Next line here
