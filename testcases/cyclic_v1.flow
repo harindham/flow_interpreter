@@ -1,0 +1,16 @@
+node=list
+command=ls
+
+node=filter
+command=grep txt
+
+node=count
+command=wc
+
+pipe=pipe1
+from=list
+to=filter
+
+pipe=pipe2
+from=pipe1
+to=count

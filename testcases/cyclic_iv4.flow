@@ -1,0 +1,11 @@
+node=base
+command=cat file.txt
+
+concatenate=combo
+parts=2
+part_0=base
+part_1=loop_pipe
+
+pipe=loop_pipe
+from=combo
+to=base

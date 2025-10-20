@@ -1,0 +1,19 @@
+node=listA
+command=ls /tmp
+
+node=countA
+command=wc
+
+pipe=pipeA
+from=listA
+to=countA
+
+node=listB
+command=ls /home
+
+node=countB
+command=wc
+
+pipe=pipeB
+from=listB
+to=countB

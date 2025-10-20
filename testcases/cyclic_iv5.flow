@@ -1,0 +1,17 @@
+node=nodeA
+command=ls
+
+node=nodeB
+command=grep txt
+
+pipe=pipe1
+from=pipe2
+to=nodeA
+
+pipe=pipe2
+from=pipe3
+to=nodeB
+
+pipe=pipe3
+from=pipe1
+to=nodeA

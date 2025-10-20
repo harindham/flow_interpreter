@@ -1,0 +1,6 @@
+node=output
+command=wc
+
+pipe=loop
+from=loop
+to=output

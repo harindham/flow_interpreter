@@ -1,0 +1,16 @@
+node=data
+command=cat data.txt
+
+node=proc1
+command=wc -l
+
+node=proc2
+command=wc -w
+
+pipe=line_count
+from=data
+to=proc1
+
+pipe=word_count
+from=data
+to=proc2
