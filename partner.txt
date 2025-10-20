@@ -1,0 +1,6 @@
+a) NetID of first partner : hs6169
+b) NetID of second partner : yn2503
+c) Full Name of first partner : Harindham Sharma
+d) Full Name of second partner : Yash Nagare
+e) Github Account Name of first partner : harindham
+f) Github Account Name of second partner : NagareYash
