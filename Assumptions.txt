@@ -1,0 +1,11 @@
+Assumption for Cycle detection:
+
+We assume that during execution, the system first performs a cycle detection check within the workflow or dependency graph.
+If a cycle is detected, it indicates a circular dependency that could lead to infinite execution or deadlock. In such a case,
+the program will terminate immediately without executing any further operations, ensuring stability and preventing undefined
+behavior.
+
+Folder Structure insight: 
+
+All test cases are organized within the testcase folder, and a dedicated best_test.flow file is maintained to represent the
+most comprehensive and well-designed test case for evaluating the system’s functionality.

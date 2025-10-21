@@ -1,0 +1,3 @@
+Welcome to foobar !!!
+
+“Foobar” in English is a generic word that can be applied to various things in programming, such as variables, functions or command which aren't really important.

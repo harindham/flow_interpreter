@@ -1,0 +1,12 @@
+node=mkdirattempt
+command=mkdir a
+
+node=wordcount
+command=wc
+
+stderr=stdouttostderrformkdir
+from=mkdirattempt
+
+pipe=pipecatcherrors
+from=stdouttostderrformkdir
+to=wordcount

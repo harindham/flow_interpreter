@@ -1,0 +1,30 @@
+node=n1
+command=echo start
+
+node=n2
+command=cat
+
+node=n3
+command=grep a
+
+node=n4
+command=sort
+
+node=n5
+command=uniq
+
+pipe=p1
+from=n1
+to=n2
+
+pipe=p2
+from=p1
+to=n3
+
+pipe=p3
+from=p2
+to=n4
+
+pipe=p4
+from=p3
+to=n5

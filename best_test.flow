@@ -1,0 +1,155 @@
+# ========== DATA SOURCES ==========
+node=source_alpha
+command=echo -e "alpha\nbeta\ngamma\ndelta"
+
+node=source_numeric
+command=seq 1 5
+
+# ========== FILE INPUT ==========
+file=data_file
+name=best_test_input.txt
+
+# ========== STDERR CAPTURE ==========
+node=error_gen
+command=ls /nonexistent_nuclear_path_xyz 2>&1
+
+stderr=error_captured
+from=error_gen
+
+node=error_prefix
+command=sed 's/^/[ERR] /'
+
+pipe=error_pipe
+from=error_captured
+to=error_prefix
+
+# ========== DEEP TRANSFORMATION CHAIN 1 ==========
+node=upper1
+command=tr a-z A-Z
+
+node=prefix1
+command=sed 's/^/CHAIN1: /'
+
+node=sort1
+command=sort
+
+pipe=chain1_step1
+from=source_alpha
+to=upper1
+
+pipe=chain1_step2
+from=chain1_step1
+to=prefix1
+
+pipe=chain1_step3
+from=chain1_step2
+to=sort1
+
+# ========== DEEP TRANSFORMATION CHAIN 2 ==========
+node=lower2
+command=tr A-Z a-z
+
+node=reverse2
+command=tac
+
+node=suffix2
+command=sed 's/$/ <CHAIN2>/'
+
+pipe=chain2_step1
+from=source_alpha
+to=lower2
+
+pipe=chain2_step2
+from=chain2_step1
+to=reverse2
+
+pipe=chain2_step3
+from=chain2_step2
+to=suffix2
+
+# ========== NUMERIC PROCESSING ==========
+node=double_nums
+command=awk '{print $1*2}'
+
+node=add_label
+command=sed 's/^/NUM: /'
+
+pipe=numeric_step1
+from=source_numeric
+to=double_nums
+
+pipe=numeric_step2
+from=numeric_step1
+to=add_label
+
+# ========== FILE PROCESSING ==========
+node=file_upper
+command=tr a-z A-Z
+
+pipe=file_process
+from=data_file
+to=file_upper
+
+# ========== FIRST LEVEL CONCATENATE (CHAINS) ==========
+concatenate=chains_combined
+parts=2
+part_0=chain1_step3
+part_1=chain2_step3
+
+# ========== SECOND LEVEL CONCATENATE (CHAINS + NUMERIC) ==========
+concatenate=chains_and_nums
+parts=2
+part_0=chains_combined
+part_1=numeric_step2
+
+# ========== THIRD LEVEL CONCATENATE (ALL DATA SOURCES) ==========
+concatenate=all_data
+parts=4
+part_0=error_pipe
+part_1=chains_and_nums
+part_2=file_process
+part_3=source_alpha
+
+# ========== SORTING AND NUMBERING ==========
+node=final_sort
+command=sort
+
+pipe=sorted_data
+from=all_data
+to=final_sort
+
+node=add_line_numbers
+command=nl
+
+pipe=numbered_data
+from=sorted_data
+to=add_line_numbers
+
+# ========== PARALLEL OUTPUTS ==========
+node=line_counter
+command=wc -l
+
+pipe=count_output
+from=numbered_data
+to=line_counter
+
+file=output_file
+name=result.txt
+
+pipe=file_output
+from=numbered_data
+to=output_file
+
+# ========== MASTER CONCATENATE (SIMULATE TEE) ==========
+concatenate=tee_simulation
+parts=2
+part_0=count_output
+part_1=file_output
+
+# ========== FINAL VERIFICATION ==========
+node=verify
+command=cat
+
+pipe=nuclear_test
+from=tee_simulation
+to=verify

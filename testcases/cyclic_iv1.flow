@@ -1,0 +1,10 @@
+node=start
+command=echo hello
+
+pipe=A
+from=B
+to=start
+
+pipe=B
+from=A
+to=start

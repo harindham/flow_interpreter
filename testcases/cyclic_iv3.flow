@@ -1,0 +1,14 @@
+node=final
+command=wc
+
+pipe=first
+from=second
+to=final
+
+pipe=second
+from=third
+to=final
+
+pipe=third
+from=first
+to=final

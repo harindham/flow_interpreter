@@ -1,0 +1,16 @@
+node=a
+command=echo hello
+
+node=b
+command=tr a-z A-Z
+
+node=c
+command=wc
+
+pipe=pipe1
+from=a
+to=b
+
+pipe=pipe2
+from=pipe1
+to=c

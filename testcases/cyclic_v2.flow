@@ -1,0 +1,28 @@
+node=source
+command=echo "test data"
+
+node=upper
+command=tr a-z A-Z
+
+node=lower
+command=tr A-Z a-z
+
+pipe=to_upper
+from=source
+to=upper
+
+pipe=to_lower
+from=source
+to=lower
+
+concatenate=both
+parts=2
+part_0=to_upper
+part_1=to_lower
+
+node=final
+command=wc
+
+pipe=merge
+from=both
+to=final

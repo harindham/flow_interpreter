@@ -1,0 +1,16 @@
+file=inputfile
+name=foo.txt
+
+node=wordcount
+command=wc
+
+file=outputfile
+name=out.txt
+
+pipe=pipe1
+from=inputfile
+to=wordcount
+
+pipe=pipe2
+from=pipe1
+to=outputfile
