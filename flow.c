@@ -237,10 +237,8 @@ void parse_flow_file(const char *filename, Flow *flow)
     fclose(f);
 }
 
-// PRE-EXECUTION CYCLE DETECTION
 int validate_component(Flow *flow, const char *name, char stack[][64], int stack_count, char visited[][64], int *visited_count)
 {
-    // Check if in current call stack (cycle detected)
     for (int i = 0; i < stack_count; i++)
     {
         if (strncmp(stack[i], name, 64) == 0)
@@ -255,20 +253,17 @@ int validate_component(Flow *flow, const char *name, char stack[][64], int stack
         }
     }
 
-    // Check if already validated (optimization)
     for (int i = 0; i < *visited_count; i++)
     {
         if (strncmp(visited[i], name, 64) == 0)
         {
-            return 0; // Already checked, no cycle
+            return 0; 
         }
     }
 
-    // Add to current path
     strncpy(stack[stack_count], name, 63);
     stack[stack_count][63] = '\0';
 
-    // Check dependencies based on component type
     Pipe *p = find_pipe(flow, name);
     if (p)
     {
@@ -295,7 +290,6 @@ int validate_component(Flow *flow, const char *name, char stack[][64], int stack
             return 1;
     }
 
-    // Mark as validated
     strncpy(visited[*visited_count], name, 63);
     visited[*visited_count][63] = '\0';
     (*visited_count)++;
@@ -309,7 +303,6 @@ void validate_flow(Flow *flow)
     char visited[MAX_CALL_STACK][64] = {0};
     int visited_count = 0;
 
-    // Check all pipes
     for (int i = 0; i < flow->pipe_count; i++)
     {
         if (validate_component(flow, flow->pipes[i].name, stack, 0, visited, &visited_count))
@@ -318,7 +311,6 @@ void validate_flow(Flow *flow)
         }
     }
 
-    // Check all concatenates
     for (int i = 0; i < flow->concat_count; i++)
     {
         if (validate_component(flow, flow->concats[i].name, stack, 0, visited, &visited_count))
@@ -327,7 +319,6 @@ void validate_flow(Flow *flow)
         }
     }
 
-    // Check all stderr redirects
     for (int i = 0; i < flow->err_count; i++)
     {
         if (validate_component(flow, flow->errors[i].name, stack, 0, visited, &visited_count))
