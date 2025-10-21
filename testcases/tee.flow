@@ -1,0 +1,9 @@
+node=list_dir
+command=ls
+
+node=tee_to_foo
+command=tee foo.txt
+
+pipe=ls_to_foo
+from=list_dir
+to=tee_to_foo
