@@ -58,3 +58,15 @@ The `execute_component()` function recursively resolves dependencies and execute
 - Uses `dup2()` to redirect stdin, stdout, and optionally stderr between processes
 - Proper file descriptor cleanup in parent and child processes
 - Efficient streaming via file descriptors with 4KB buffer for file operations
+
+
+## Extra Credit Submission
+
+### Test File: `best_test.flow`
+### Target Component: `chains_and_nums` (concatenate)
+
+**What This Tests:** A concatenate component where `part_0=chains_combined` is itself another concatenate (creating 2-level nesting), and `part_1=numeric_step2` is a multi-stage pipe. This component is embedded within a comprehensive flow that includes file I/O, stderr redirection, 3-level concatenate nesting, and 15+ total components, requiring proper recursive resolution, sequential execution with `waitpid()` synchronization, and careful file descriptor management across 30+ FDs.
+
+**Why Most Will Fail:** Most implementations hard-code the assumption that concatenate parts are simple nodes, causing them to crash with "component not found" or produce corrupted output due to race conditions when child processes from the nested concatenate execute in parallel without proper synchronization. This tests the critical intersection of concatenate nesting, mixed component types (concatenates + pipes), and sequential execution that students typically miss when only testing simple node-based concatenates, making it an ideal edge case that exposes fundamental architectural flaws in incomplete implementations.
+
+**Run:** `./flow best_test.flow nuclear_test` (Expected: `21` lines counted + `result.txt` with sorted, numbered output)

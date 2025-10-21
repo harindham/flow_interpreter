@@ -2,7 +2,7 @@ node=list_dir
 command=ls
 
 node=tee_to_foo
-command=tee foo.txt
+command=tee foot.txt
 
 pipe=ls_to_foo
 from=list_dir

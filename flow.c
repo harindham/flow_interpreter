@@ -5,11 +5,11 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 
-#define MAX_NODES 1024
-#define MAX_PIPES 1024
-#define MAX_CONCAT 1024
-#define MAX_PARTS 1024
-#define MAX_CALL_STACK 1024
+#define MAX_NODES 128
+#define MAX_PIPES 128
+#define MAX_CONCAT 128
+#define MAX_PARTS 16
+#define MAX_CALL_STACK 256
 
 typedef struct Node
 {
@@ -441,7 +441,39 @@ void execute_component(Flow *flow, const char *name, int input_fd, int output_fd
     {
         for (int i = 0; i < concat->parts; i++)
         {
-            execute_component(flow, concat->partnames[i], input_fd, output_fd);
+            int temp_pipe[2];
+            if (pipe(temp_pipe) == -1)
+            {
+                perror("pipe in concat");
+                exit(1);
+            }
+
+            pid_t pid = fork();
+            if (pid == 0)
+            {
+                close(temp_pipe[0]);
+                execute_component(flow, concat->partnames[i], input_fd, temp_pipe[1]);
+                close(temp_pipe[1]);
+                exit(0);
+            }
+            else if (pid > 0)
+            {
+                close(temp_pipe[1]);
+                waitpid(pid, NULL, 0);
+                
+                char buffer[4096];
+                ssize_t bytes;
+                while ((bytes = read(temp_pipe[0], buffer, sizeof(buffer))) > 0)
+                {
+                    write(output_fd, buffer, bytes);
+                }
+                close(temp_pipe[0]);
+            }
+            else
+            {
+                perror("fork in concat");
+                exit(1);
+            }
         }
         return;
     }
