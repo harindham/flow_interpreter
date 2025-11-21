@@ -64,10 +64,12 @@ pthread_mutex_unlock(&table_mutex);
 
 ### Performance Graph: Original vs Mutex
 ![Part 1 Graph: Original vs Mutex Performance Comparison](images/Graph%201.png)
+**Key Observations from Graph:**
+- Original (turquoise): Gets faster with threads (6.35s → 2.12s)
+- Mutex (dark blue): Gets slower with threads (6.20s → 9.38s)
 
 ### Performance Results
 **Original (Unsafe) Version:**
-
 | Threads | Insert Time | Retrieve Time | Keys Retrieved | Keys Lost |
 |---------|-------------|---------------|----------------|-----------|
 | 1       | 0.0067s     | 6.350311s     | 100000/100000  | 0         |
@@ -76,7 +78,6 @@ pthread_mutex_unlock(&table_mutex);
 | 8       | 0.0062s     | 2.121027s     | 98907/100000   | 1,093     |
 
 **Global Mutex (Safe) Version:**
-
 | Threads | Insert Time | Retrieve Time | Keys Retrieved | Keys Lost |
 |---------|-------------|---------------|----------------|-----------|
 | 1       | 0.0110s     | 6.204864s     | 100000/100000  | 0         |
@@ -84,36 +85,42 @@ pthread_mutex_unlock(&table_mutex);
 | 4       | 0.0082s     | 9.015849s     | 100000/100000  | 0         |
 | 8       | 0.0101s     | 9.378774s     | 100000/100000  | 0         |
 
-
 **Correctness achieved:** 0 keys lost across all thread counts
 
 ### Overhead Estimate
-We calculate overhead by comparing the mutex version to its **1-thread baseline** (since the original is incorrect).
+We calculate overhead by comparing the mutex version to the **original (unsafe) version** at each thread count to show the cost of correctness.
 
 **Calculation Formula:**
 ```
-Overhead = (Time_N_threads - Time_1_thread) / Time_1_thread × 100%
+Slowdown Factor = Mutex_Time / Original_Time
+Overhead Percentage = ((Mutex_Time - Original_Time) / Original_Time) × 100%
 ```
 
+
 **Results:**
-| Threads | Retrieve Time | Overhead vs 1-thread Baseline |
-|---------|---------------|-------------------------------|
-| 1       | 6.204864s     | 0.0% (baseline)               |
-| 2       | 8.664895s     | +39.7%                        |
-| 4       | 9.015849s     | +45.3%                        |
-| 8       | 9.378774s     | **+51.2%**                    |
+| Threads | Original Time | Mutex Time | Slowdown Factor | Overhead Percentage |
+|---------|---------------|------------|-----------------|---------------------|
+| 1       | 6.350311s     | 6.204864s  | 0.98×           | -2.3%               |
+| 2       | 3.179568s     | 8.664895s  | 2.73×           | +172.5%             |
+| 4       | 1.951982s     | 9.015849s  | 4.62×           | +361.9%             |
+| 8       | 2.121027s     | 9.378774s  | **4.42×**       | **+342.2%**         |
 
 **At 8 threads:**
 ```
-(9.378774 - 6.204864) / 6.204864 × 100% = +51.2% overhead
+Slowdown Factor = 9.378774s / 2.121027s = 4.42
+Overhead = ((9.378774 - 2.121027) / 2.121027) × 100%
+= (7.257747 / 2.121027) × 100%
+= 342.2%
 ```
 
 ### Explanation of Overhead
-The 51.2% overhead occurs because the global mutex eliminates all parallelism. With 8 threads competing for one lock, only 1 thread works while 7 wait. This causes operations execute sequentially, not in parallel, Blocking on locks triggers expensive OS context switches.
+At 8 threads, the mutex version is **4.42× slower** than the original (342% overhead). While the original appears fast (2.12s), it loses 1,093 keys. The mutex version guarantees correctness but pays a heavy performance cost because:
 
-As thread count increases (2→4→8), contention grows, causing overhead to rise from 39.7% to 51.2%. The hash table has 5 independent buckets that could operate in parallel, but the global lock treats them all as conflicting.
+- **Serialization:** The global mutex forces all operations to execute sequentially, eliminating parallelism
+- **Lock contention:** With 8 threads competing for 1 lock, only 1 thread works while 7 wait
+- **Context switching:** Blocking on locks triggers expensive OS context switches
 
-Despite the overhead, correctness is achieved: 0 keys lost vs 1,093 lost in the unsafe version. The retrieve time actually **increases** with more threads (6.20s → 9.38s) instead of decreasing, showing that the global lock completely eliminates parallelism benefits and adds significant synchronization overhead.
+The overhead grows dramatically as threads increase because the original benefits from parallelism (6.35s→2.12s getting faster), while the mutex version gets worse (6.20s→9.38s getting slower). This massive overhead shows why we need better approaches like per-bucket locking in later parts.
 
 ## Part 2: Spinlock Implementation [30 Points]
 
