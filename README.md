@@ -106,10 +106,10 @@ We calculate overhead by comparing the mutex version to the **original (unsafe) 
 
 **Calculation Formula:**
 
-```markdown
+`
 Slowdown Factor = Mutex_Time / Original_Time
 Overhead Percentage = ((Mutex_Time - Original_Time) / Original_Time) × 100%
-```
+`
 
 **Results:**
 
@@ -122,12 +122,12 @@ Overhead Percentage = ((Mutex_Time - Original_Time) / Original_Time) × 100%
 
 **At 8 threads:**
 
-```markdown
+`
 Slowdown Factor = 9.378774s / 2.121027s = 4.42
 Overhead = ((9.378774 - 2.121027) / 2.121027) × 100%
 = (7.257747 / 2.121027) × 100%
 = 342.2%
-```
+`
 
 ### How We Estimated This
 
