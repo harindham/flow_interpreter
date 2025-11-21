@@ -50,14 +50,11 @@ void insert(int key, int val) {
 bucket_entry * retrieve(int key) {
   int i = key % NUM_BUCKETS;
   bucket_entry *b;
-  pthread_mutex_lock(&bucket_locks[i]);
   for (b = table[key % NUM_BUCKETS]; b != NULL; b = b->next) {
     if (b->key == key){
-      pthread_mutex_unlock(&bucket_locks[i]);
       return b;
     }
   }
-  pthread_mutex_unlock(&bucket_locks[i]);
   return NULL;
 }
 
