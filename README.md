@@ -42,6 +42,10 @@ When multiple threads simultaneously insert into the same bucket, they perform a
 
 The linked list structure means we need **atomicity** for the entire read-modify-write operation. Without synchronization, concurrent modifications to the same bucket head pointer cause entries to become disconnected from the list and unreachable.
 
+**Parts of the program causing this:**
+- **Primary culprit:** The `insert()` function's non-atomic read-modify-write of `table[i]`
+- **Secondary issue:** The `retrieve()` function can also see inconsistent state during concurrent insertions
+
 ### Implementation
 Added a global `pthread_mutex_t table_mutex` that protects all hash table operations. Both `insert()` and `retrieve()` acquire this lock before accessing the table, ensuring mutual exclusion.
 
@@ -58,26 +62,58 @@ pthread_mutex_lock(&table_mutex);
 pthread_mutex_unlock(&table_mutex);
 ```
 
-### Performance Results
-| Threads | Original (Unsafe) | Global Mutex | Keys Lost (Original) |
-|---------|-------------------|--------------|----------------------|
-| 1       | 6.35s             | 6.20s        | 0                    |
-| 2       | 3.18s             | 8.66s        | 821                  |
-| 4       | 1.95s             | 9.02s        | 1,304                |
-| 8       | 2.12s             | 9.38s        | 1,093                |
+### Performance Graph: Original vs Mutex
+![Part 1 Graph: Original vs Mutex Performance Comparison](images/Graph 1.jpg)
 
-**Global Mutex Results:**
-| Threads | Keys Lost | Retrieve Time |
-|---------|-----------|---------------|
-| 1       | 0         | 6.20s         |
-| 2       | 0         | 8.66s         |
-| 4       | 0         | 9.02s         |
-| 8       | 0         | 9.38s         |
+### Performance Results
+**Original (Unsafe) Version:**
+
+| Threads | Insert Time | Retrieve Time | Keys Retrieved | Keys Lost |
+|---------|-------------|---------------|----------------|-----------|
+| 1       | 0.0067s     | 6.350311s     | 100000/100000  | 0         |
+| 2       | 0.0043s     | 3.179568s     | 99179/100000   | 821       |
+| 4       | 0.0047s     | 1.951982s     | 98696/100000   | 1,304     |
+| 8       | 0.0062s     | 2.121027s     | 98907/100000   | 1,093     |
+
+**Global Mutex (Safe) Version:**
+
+| Threads | Insert Time | Retrieve Time | Keys Retrieved | Keys Lost |
+|---------|-------------|---------------|----------------|-----------|
+| 1       | 0.0110s     | 6.204864s     | 100000/100000  | 0         |
+| 2       | 0.0064s     | 8.664895s     | 100000/100000  | 0         |
+| 4       | 0.0082s     | 9.015849s     | 100000/100000  | 0         |
+| 8       | 0.0101s     | 9.378774s     | 100000/100000  | 0         |
+
 
 **Correctness achieved:** 0 keys lost across all thread counts
 
 ### Overhead Estimate
-The retrieve time actually **increases** with more threads (6.20s → 9.38s) instead of decreasing, showing that the global lock completely eliminates parallelism benefits and adds significant synchronization overhead.
+We calculate overhead by comparing the mutex version to its **1-thread baseline** (since the original is incorrect).
+
+**Calculation Formula:**
+```
+Overhead = (Time_N_threads - Time_1_thread) / Time_1_thread × 100%
+```
+
+**Results:**
+| Threads | Retrieve Time | Overhead vs 1-thread Baseline |
+|---------|---------------|-------------------------------|
+| 1       | 6.204864s     | 0.0% (baseline)               |
+| 2       | 8.664895s     | +39.7%                        |
+| 4       | 9.015849s     | +45.3%                        |
+| 8       | 9.378774s     | **+51.2%**                    |
+
+**At 8 threads:**
+```
+(9.378774 - 6.204864) / 6.204864 × 100% = +51.2% overhead
+```
+
+### Explanation of Overhead
+The 51.2% overhead occurs because the global mutex eliminates all parallelism. With 8 threads competing for one lock, only 1 thread works while 7 wait. This causes operations execute sequentially, not in parallel, Blocking on locks triggers expensive OS context switches.
+
+As thread count increases (2→4→8), contention grows, causing overhead to rise from 39.7% to 51.2%. The hash table has 5 independent buckets that could operate in parallel, but the global lock treats them all as conflicting.
+
+Despite the overhead, correctness is achieved: 0 keys lost vs 1,093 lost in the unsafe version. The retrieve time actually **increases** with more threads (6.20s → 9.38s) instead of decreasing, showing that the global lock completely eliminates parallelism benefits and adds significant synchronization overhead.
 
 ## Part 2: Spinlock Implementation [30 Points]
 
