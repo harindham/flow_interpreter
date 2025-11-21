@@ -221,7 +221,7 @@ We calculate overhead by comparing spinlock to the **original (unsafe) version**
 
 ### How We Estimated this Overhead
 
-We ran all three implementations (original, mutex, spinlock) with identical workloads and compared retrieve times at each thread count. The spinlock overhead is calculated relative to the original to show the total synchronization cost.
+We ran all three implementations (original, mutex, spinlock) with identical workloads (100,000 keys, 1/2/4/8 threads) and recorded retrieve times for each run. The spinlock overhead is calculated relative to the original unsafe version at the same thread count using the formula: `(Spinlock_Time - Original_Time) / Original_Time × 100%`. This shows the total cost of adding spinlock-based synchronization. We focused on retrieve times since they dominate performance (~6-18s vs ~0.004-0.01s for inserts).
 
 ### Explanation of Overhead for Spinlock
 
