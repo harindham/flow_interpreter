@@ -35,9 +35,9 @@ double now() {
 // Inserts a key-value pair into the table
 void insert(int key, int val) {
   int i = key % NUM_BUCKETS;
-  pthread_mutex_lock(&bucket_locks[i]);
   bucket_entry *e = (bucket_entry *) malloc(sizeof(bucket_entry));
   if (!e) panic("No memory to allocate bucket!");
+  pthread_mutex_lock(&bucket_locks[i]);
   e->next = table[i];
   e->key = key;
   e->val = val;
@@ -50,11 +50,14 @@ void insert(int key, int val) {
 bucket_entry * retrieve(int key) {
   int i = key % NUM_BUCKETS;
   bucket_entry *b;
+  pthread_mutex_lock(&bucket_locks[i]);
   for (b = table[key % NUM_BUCKETS]; b != NULL; b = b->next) {
     if (b->key == key){
+      pthread_mutex_unlock(&bucket_locks[i]);
       return b;
     }
   }
+  pthread_mutex_unlock(&bucket_locks[i]);
   return NULL;
 }
 
@@ -143,5 +146,11 @@ int main(int argc, char **argv) {
 
   printf("[main] Retrieved %ld/%d keys in %f seconds\n", NUM_KEYS - total_lost, NUM_KEYS, end - start);
 
+  for (i = 0; i < NUM_BUCKETS; i++) {
+    pthread_mutex_destroy(&bucket_locks[i]);
+  }
+  free(threads);
+  free(lost_keys);
+  
   return 0;
 }

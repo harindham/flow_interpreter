@@ -35,9 +35,9 @@ double now() {
 // Inserts a key-value pair into the table
 void insert(int key, int val) {
   int i = key % NUM_BUCKETS;
-  pthread_mutex_lock(&myLock);
   bucket_entry *e = (bucket_entry *) malloc(sizeof(bucket_entry));
   if (!e) panic("No memory to allocate bucket!");
+  pthread_mutex_lock(&myLock);
   e->next = table[i];
   e->key = key;
   e->val = val;
@@ -49,8 +49,8 @@ void insert(int key, int val) {
 // Returns NULL if the key isn't found in the table
 bucket_entry * retrieve(int key) {
   int i = key % NUM_BUCKETS;
-  pthread_mutex_lock(&myLock);
   bucket_entry *b;
+  pthread_mutex_lock(&myLock);
   for (b = table[key % NUM_BUCKETS]; b != NULL; b = b->next) {
     if (b->key == key){
       pthread_mutex_unlock(&myLock);
@@ -145,5 +145,9 @@ int main(int argc, char **argv) {
 
   printf("[main] Retrieved %ld/%d keys in %f seconds\n", NUM_KEYS - total_lost, NUM_KEYS, end - start);
 
+  pthread_mutex_destroy(&myLock);
+  free(threads);
+  free(lost_keys);
+  
   return 0;
 }

@@ -53,3 +53,9 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Binaries
+parallel_mutex
+parallel_spin
+parallel_hashtable
+parallel_mutex_opt
