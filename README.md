@@ -63,7 +63,7 @@ pthread_mutex_unlock(&table_mutex);
 ```
 
 ### Performance Graph: Original vs Mutex
-![Part 1 Graph: Original vs Mutex Performance Comparison](images/Graph 1.jpg)
+![Part 1 Graph: Original vs Mutex Performance Comparison](images/Graph%201.jpg)
 
 ### Performance Results
 **Original (Unsafe) Version:**
