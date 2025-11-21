@@ -206,9 +206,7 @@ We calculate overhead by comparing spinlock to the **original (unsafe) version**
 
 **Calculation Formula:**
 
-```markdown
-Overhead = ((Spinlock_Time - Original_Time) / Original_Time) × 100%
-```
+`Overhead = ((Spinlock_Time - Original_Time) / Original_Time) × 100%`
 
 **Results:**
 
