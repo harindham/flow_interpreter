@@ -9,8 +9,7 @@
 - [Part 4: Insert Parallelization [20 Points]](#part-4-insert-parallelization-20-points)
 - [Performance Summary](#performance-summary)
 - [Compilation and Testing](#compilation-and-testing)
-- [Assumptions](#assumptions)
-- [Conclusions](#conclusions)
+- [Conclusions](#final-conclusion)
 
 ## Overview
 
@@ -543,6 +542,6 @@ gcc -pthread parallel_mutex_opt.c -o parallel_mutex_opt
 [main] Retrieved 100000/100000 keys in X.XXXXXX seconds
 ```
 
-### Final Comparison
+## Final Conclusion
 
 The optimized per-bucket approach shows that with careful design, we can achieve both **thread-safety and good parallel performance**. The key is identifying opportunities for fine-grained locking where operations on different data structures can proceed independently.
