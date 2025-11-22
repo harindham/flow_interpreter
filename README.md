@@ -485,7 +485,7 @@ The performance improvement from 9.38s (global mutex) to 2.81s (per-bucket) at 8
 
 ### Performance Graph
 
-![Graph: Performance Comparison](images/Graph%203.jpg)
+![Graph: Performance Comparison](images/Graph%203.png)
 
 **Key Observations from Graph:**
 
