@@ -161,6 +161,11 @@ Spinlocks are only beneficial for **very short** critical sections where `spin_t
 ### Performance Graph: Original vs Mutex vs Spinlock
 
 ![Part 2 Graph: Three-Way Performance Comparison](images/Graph%202.png)
+**Key Observations from Graph:**
+
+- **Original (turquoise):** Gets faster with threads (6.35s → 2.12s) but loses keys
+- **Mutex (dark blue):** Gets slower with threads (6.20s → 9.38s) due to serialization
+- **Spinlock (yellow):** Stays flat at 2-4 threads (~6s), outperforming mutex, but spikes catastrophically to 18.11s at 8 threads
 
 ### Performance Results
 
@@ -238,106 +243,193 @@ The overhead explodes from 1.1% (1 thread) to 754% (8 threads) because contentio
 
 ### Do We Need a Lock for Retrieval?
 
-**Yes, we need a lock for retrieval**, but we can optimize how we use locks.
+**In this specific workload, locks are not required for retrieval** because the test separates inserts and retrieves with a barrier (`pthread_join()`). During the retrieve phase, only readers access the hash table, and no modifications occur.
 
-#### Why We Need Locks for Reading
+However, **in a general-purpose concurrent hash table** where inserts and retrieves happen simultaneously, locks would be necessary to prevent readers from seeing inconsistent state while writers modify the structure.
 
-Even though `retrieve()` only reads data, concurrent writes could be modifying the linked list structure while a read is in progress. Without synchronization:
+For this assignment, we implement per-bucket locks in `insert()` to enable parallel insertions, while `retrieve()` remains lock-free due to the phase-separated workload pattern.
 
-- A thread traversing a linked list (following `next` pointers) could see **inconsistent state**
-- A concurrent `insert()` could modify `table[i]` or `next` pointers mid-traversal
-- This could cause reads to follow **invalid pointers**, segfault, or miss entries
-- Even pure reads need protection when concurrent writes are possible
+### What We Changed to Enable Parallel Retrieval
 
-#### Optimization Opportunity
-
-We don't need to lock the **entire table** for retrieval. Key insight: **Multiple retrievals from different buckets can safely run in parallel** since each bucket is an independent linked list.
-
-### Implementation Changes
-
-**Original approach (Part 1):**
+**Original approach (Part 1 - Global Mutex):**
 
 ```c
-pthread_mutex_t table_mutex;  // One lock for everything - ALL operations serialize
+pthread_mutex_t table_mutex; // ONE global lock for entire table
 ```
 
-**Optimized approach (Part 3):**
+**Problem:** All operations serialize, even when accessing different buckets
+
+**Optimized approach (Part 3 - Per-Bucket Mutex):**
 
 ```c
-pthread_mutex_t bucket_locks[NUM_BUCKETS];  // One lock per bucket
+pthread_mutex_t bucket_locks[NUM_BUCKETS]; // ONE lock per bucket
 ```
 
-**In `retrieve()`:**
+**Benefit:** Operations on different buckets can run in parallel
+
+### Implementation Changes in `parallel_mutex_opt.c`
+
+**1. Declared per-bucket mutex array:**
 
 ```c
-bucket_entry * retrieve(int key) {
-  int i = key % NUM_BUCKETS;
-  pthread_mutex_lock(&bucket_locks[i]);  // Lock ONLY this bucket
-  
-  for (b = table[i]; b != NULL; b = b->next) {
-    if (b->key == key) {
-      pthread_mutex_unlock(&bucket_locks[i]);
-      return b;
-    }
-  }
-  
-  pthread_mutex_unlock(&bucket_locks[i]);
-  return NULL;
+pthread_mutex_t bucket_locks[NUM_BUCKETS];
+```
+
+**2. Initialize all bucket locks in `main()`:**
+
+```c
+for (i = 0; i < NUM_BUCKETS; i++) {
+pthread_mutex_init(&bucket_locks[i], NULL);
 }
 ```
 
-**Impact:** This allows retrievals from different buckets to run concurrently, significantly reducing contention from **100%** (all operations fight for 1 lock) to **~20%** (only operations on the same bucket contend, assuming uniform distribution across 5 buckets).
+**3. Modified `insert()` to lock only the target bucket:**
+
+```c
+void insert(int key, int val) {
+int i = key % NUM_BUCKETS;
+bucket_entry *e = (bucket_entry*) malloc(sizeof(bucket_entry));
+if (!e) panic("No memory to allocate bucket!");
+
+pthread_mutex_lock(&bucket_locks[i]); // Lock ONLY bucket i
+e->next = table[i];
+e->key = key;
+e->val = val;
+table[i] = e;
+pthread_mutex_unlock(&bucket_locks[i]);
+}
+```
+
+**4. `retrieve()` remains lock-free:**
+
+```c
+bucket_entry *retrieve(int key) {
+int i = key % NUM_BUCKETS;
+bucket_entry*b;
+for (b = table[i]; b != NULL; b = b->next) {
+if (b->key == key) {
+return b;
+}
+}
+return NULL;
+}
+```
+
+Since retrievals occur after all inserts complete, no synchronization is needed during the read-only phase.
+
+**5. Cleanup all locks at the end:**
+
+```c
+for (i = 0; i < NUM_BUCKETS; i++) {
+pthread_mutex_destroy(&bucket_locks[i]);
+}
+```
+
+### Why This Enables Parallelization
+
+**Contention reduction during insert phase:**
+
+- **Global lock:** 100% contention - all insertions serialize
+- **Per-bucket locks:** ~20% contention - only insertions to the same bucket conflict
+- With 5 buckets and uniform hashing: collision probability = 1/5 = 20%
+
+**Parallel execution during retrieve phase:**
+
+- **No locks needed:** All threads are readers, no conflicts
+- **Full parallelism:** All threads can retrieve simultaneously without any synchronization overhead
+- Multiple threads can even read from the same bucket concurrently since no modifications occur
+
+**Result:**
+
+- Insert phase: 80% of operations proceed in parallel (different buckets)
+- Retrieve phase: 100% parallelism (all readers, no locks)
+
+**Performance impact:**
+
+- Part 1 (global mutex): 9.38s retrieve at 8 threads
+- Part 3 (per-bucket optimized): 2.81s retrieve at 8 threads (**3.3× faster**)
+- Speedup from 1 to 8 threads: 7.15s → 2.81s (**2.5× parallelization gain**)
+
+The combination of per-bucket locking for inserts and lock-free retrieval (enabled by phase separation) provides optimal performance while maintaining correctness for this workload pattern.
 
 ## Part 4: Insert Parallelization [20 Points]
 
-### When Can Insertions be Safely Parallelized?
+### When Can Multiple Insertions Happen Safely?
 
-**Multiple insertions can happen safely when they target different buckets.**
+**Multiple insertions can happen safely in parallel when they target different buckets.**
 
-#### Key Insight: What's a Bucket?
+**Explanation:**
 
-The hash table uses **separate chaining**: `table[NUM_BUCKETS]` is an array where each element is the head of an independent linked list (bucket).
+A **bucket** is an independent chain in the hash table. The hash table has 5 separate buckets (indices 0-4), and each bucket maintains its own linked list of entries. The key insight is that operations on different buckets are **completely independent**:
 
-```markdown
-table → entryA → entryB → NULL
-table → entryC → NULL
-table → entryD → entryE → entryF → NULL
-table → NULL
-table → entryG → NULL
-```
+- Inserting into bucket 0 doesn't affect bucket 1's linked list
+- Inserting into bucket 2 doesn't modify bucket 3's data structures
+- Each bucket's head pointer (`table[i]`) is a separate memory location
 
-Since buckets don't share data structures:
+**Safe parallel insertion scenario:**
 
-- Inserting into bucket 0 **doesn't affect** bucket 1
-- Each bucket head (`table[i]`) is independent
-- Only insertions to the **same bucket** conflict
-
-#### When Synchronization IS Needed
-
-Insertions to the **same bucket** must serialize because they both modify the same `table[i]` head pointer, causing the race condition described in Part 1.
-
-### Implementation Changes
-
-**Per-bucket mutex array:**
+```c
+Thread A: insert(key=10) → bucket 0
+Thread B: insert(key=23) → bucket 3
+Thread C: insert(key=47) → bucket 2
+Thread D: insert(key=15) → bucket 0  ← Conflicts with Thread A only
 
 ```
-pthread_mutex_t bucket_locks[NUM_BUCKETS];
 
-// In main(): Initialize all locks
-for (i = 0; i < NUM_BUCKETS; i++) {
-    pthread_mutex_init(&bucket_locks[i], NULL);
+Threads A, B, and C can run **completely in parallel** because they access different buckets. Only Thread D must wait for Thread A (same bucket). With 5 buckets and uniform hashing, the probability of collision is only **20%** (1/5), meaning **80% of insertions can proceed in parallel**.
+
+### What We Changed to Enable Parallel Insertion
+
+The change is identical to Part 3 - we replaced the global lock with per-bucket locks. This optimization benefits **both** insert and retrieve operations.
+
+**Original approach (Part 1 - Global Mutex):**
+
+```c
+pthread_mutex_t table_mutex;  // ONE lock for ALL buckets
+
+void insert(int key, int val) {
+  pthread_mutex_lock(&table_mutex);  // Serializes ALL inserts
+  // ... insert logic ...
+  pthread_mutex_unlock(&table_mutex);
 }
 ```
 
-**In `insert()`:**
+**Problem:** All insertions serialize, even to different buckets
 
-```
+**Optimized approach (Part 4 - Per-Bucket Mutex):**
+
+```c
+pthread_mutex_t bucket_locks[NUM_BUCKETS];  // ONE lock per bucket
+
 void insert(int key, int val) {
   int i = key % NUM_BUCKETS;
+  pthread_mutex_lock(&bucket_locks[i]);  // Locks ONLY this bucket
+  // ... insert logic ...
+  pthread_mutex_unlock(&bucket_locks[i]);
+}
+```
+
+**Benefit:** Insertions to different buckets run in parallel
+
+### Implementation Details
+
+The implementation in `parallel_mutex_opt.c` provides fine-grained locking:
+
+**1. Per-bucket lock array:**
+
+```c
+pthread_mutex_t bucket_locks[NUM_BUCKETS];  // 5 independent locks
+```
+
+**2. Lock only the target bucket in `insert()`:**
+
+```c
+void insert(int key, int val) {
+  int i = key % NUM_BUCKETS;  // Determine target bucket
   bucket_entry *e = (bucket_entry *) malloc(sizeof(bucket_entry));
   if (!e) panic("No memory to allocate bucket!");
   
-  pthread_mutex_lock(&bucket_locks[i]);  // Lock only target bucket
+  pthread_mutex_lock(&bucket_locks[i]);  // Lock ONLY bucket i
   e->next = table[i];
   e->key = key;
   e->val = val;
@@ -346,9 +438,63 @@ void insert(int key, int val) {
 }
 ```
 
-**Effect:** With 5 buckets and uniform hash distribution, there's only a **20% chance** that two random operations target the same bucket. This means **80% of operations can proceed in parallel** without contention, enabling true parallelism while maintaining correctness.
+**Key design principle:** Each bucket is **independently lockable**, allowing:
 
----
+- Thread-safe modifications within a bucket
+- Parallel modifications across different buckets
+- Minimal contention (only when threads access the same bucket)
+
+### Why This Enables Parallelization for Insert
+
+**Contention analysis:**
+
+| Approach | Lock Scope | Contention | Parallelism |
+|----------|-----------|------------|-------------|
+| Global Mutex | Entire table | 100% | 0% (all serialize) |
+| Per-Bucket Mutex | Single bucket | ~20% | ~80% |
+
+**With 5 buckets and uniform hashing:**
+
+- Probability two threads collide on same bucket: 1/5 = 20%
+- Probability they access different buckets: 4/5 = 80%
+
+**Parallel execution example:**
+
+```markdown
+Time T1: Thread 0 inserts to bucket 2 (locks bucket 2)
+         Thread 1 inserts to bucket 0 (locks bucket 0) → PARALLEL
+         Thread 2 inserts to bucket 4 (locks bucket 4) → PARALLEL
+Time T2: Thread 3 inserts to bucket 2 → WAITS (bucket 2 locked)
+         Thread 4 inserts to bucket 1 (locks bucket 1) → PARALLEL
+```
+
+Only Thread 3 waits; all others execute in parallel!
+
+### Performance Impact
+
+**Insert phase timing:**
+
+| Threads | Global Mutex (Part 1) | Per-Bucket (Part 4) | Speedup |
+|---------|----------------------|---------------------|---------|
+| 1       | 0.0110s              | 0.0088s             | 1.25×   |
+| 2       | 0.0064s              | 0.0056s             | 1.14×   |
+| 4       | 0.0082s              | 0.0087s             | 0.94×   |
+| 8       | 0.0101s              | 0.0067s             | **1.51×** |
+
+**Key observations:**
+
+- Insert phase is very fast (~0.006-0.01s) for both approaches
+- Per-bucket optimization shows modest improvement at high thread counts
+- Primary benefit is in **retrieve phase** (9.38s → 2.81s at 8 threads)
+- The real win is enabling **scalable concurrent operations** without sacrificing correctness
+
+**Why insert times are similar:**
+
+- Insert operations are extremely fast (just prepending to linked list)
+- Lock overhead is small compared to the operation
+- The bottleneck is in retrieval (traversing chains), not insertion
+
+The per-bucket design provides **correctness** (0 keys lost) while maintaining **near-optimal performance** by allowing independent operations to proceed in parallel.
 
 ## Performance Summary
 
@@ -356,33 +502,27 @@ void insert(int key, int val) {
 
 | Threads | Original (Unsafe) | Global Mutex | Spinlock  | Per-Bucket Mutex |
 |---------|-------------------|--------------|-----------|------------------|
-| 1       | 6.35s             | 6.20s        | 6.42s     | 6.71s            |
-| 2       | 3.18s             | 8.66s        | 6.10s     | **4.47s** ✓      |
-| 4       | 1.95s             | 9.02s        | 6.54s     | **4.67s** ✓      |
-| 8       | 2.12s             | 9.38s        | 18.11s    | **4.14s** ✓      |
+| 1       | 6.35s             | 6.20s        | 6.42s     | 7.15s            |
+| 2       | 3.18s             | 8.66s        | 6.10s     | **3.33s**        |
+| 4       | 1.95s             | 9.02s        | 6.54s     | **2.06s**        |
+| 8       | 2.12s             | 9.38s        | 18.11s    | **2.80s**        |
 
 ### Performance Graph
 
-### Key Achievements - Per-Bucket Mutex
+![Graph: Performance Comparison](images/Graph%203.jpg)
 
-**Correctness:** 0 keys lost (thread-safe)  
-**Performance:** 1.62x speedup at 8 threads vs single-threaded  
-**Efficiency:** 2.3x faster than global mutex at 8 threads  
-**Scalability:** 4.4x faster than spinlock at 8 threads  
+**Key Observations from Graph:**
 
-### Why Per-Bucket Locking Works
-
-**Fine-grained locking reduces contention.** Instead of all threads competing for one lock, they only contend when accessing the same bucket (20% probability with 5 buckets and uniform hashing). This allows the benefits of parallelism while maintaining correctness.
-
-The optimized version achieves **38.4% speedup** over single-threaded (6.71s → 4.14s) with 8 threads, while the global mutex version shows **51.2% slowdown** (6.20s → 9.38s). This demonstrates that with careful design, we can have both thread-safety and good parallel performance.
-
----
+- **Original (turquoise):** Gets faster with threads (6.35s → 2.12s) but loses keys
+- **Mutex (dark blue):** Gets slower with threads (6.20s → 9.38s) due to global lock serialization
+- **Spinlock (yellow):** Stays flat at 2-4 threads (~6s), then spikes catastrophically to 18.11s at 8 threads
+- **Optimized (orange):** Shows true parallelization benefit - decreases from 7.15s → 2.81s at 8 threads
 
 ## Compilation and Testing
 
 ### Compile All Versions
 
-```
+```bash
 gcc -pthread parallel_hashtable.c -o parallel_hashtable
 gcc -pthread parallel_mutex.c -o parallel_mutex
 gcc -pthread parallel_spin.c -o parallel_spin
@@ -391,7 +531,7 @@ gcc -pthread parallel_mutex_opt.c -o parallel_mutex_opt
 
 ### Run Tests
 
-```
+```bash
 # Original (unsafe) - fast but incorrect
 ./parallel_hashtable 1
 ./parallel_hashtable 2
@@ -419,7 +559,7 @@ gcc -pthread parallel_mutex_opt.c -o parallel_mutex_opt
 
 ### Expected Output Format
 
-```
+```markdown
 [main] Inserted 100000 keys in X.XXXXXX seconds
 [thread 0] 0 keys lost!
 [thread 1] 0 keys lost!
@@ -428,12 +568,5 @@ gcc -pthread parallel_mutex_opt.c -o parallel_mutex_opt
 ```
 
 ### Final Comparison
-
-| Implementation    | Correctness  | Performance (8 threads) | Best Use Case                 |
-|-------------------|--------------|-------------------------|-------------------------------|
-| Original          | ❌ Unsafe    | 2.12s (fastest)         | Never (incorrect)             |
-| Global Mutex      | ✅ Safe      | 9.38s (slow)            | Simple, low-performance needs |
-| Spinlock          | ✅ Safe      | 18.11s (very slow)      | Low contention only           |
-| Per-Bucket Mutex  | ✅ Safe      | 4.14s **(best!)**       | Production use                |
 
 The optimized per-bucket approach shows that with careful design, we can achieve both **thread-safety and good parallel performance**. The key is identifying opportunities for fine-grained locking where operations on different data structures can proceed independently.
